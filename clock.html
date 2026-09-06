@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Multi Time Zone Digital Clock</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;background:#0b1220;color:#e6eef8;margin:0;padding:24px;display:flex;justify-content:center}
+    .box{max-width:900px;width:100%;background:#071024;padding:18px;border-radius:10px}
+    header{display:flex;justify-content:space-between;align-items:center}
+    h1{color:#60a5fa;margin:0;font-size:18px}
+    .controls{display:flex;gap:8px;align-items:center}
+    input{padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    button{padding:8px 10px;border-radius:6px;border:none;background:#60a5fa;color:#03203a;font-weight:600;cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:14px}
+    .card{background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
+    .tz{font-size:13px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center}
+    .time{font-size:24px;font-weight:700;margin-top:6px}
+    .date{font-size:12px;color:#94a3b8;margin-top:6px}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <header>
+      <div>
+        <h1>Multi Time Zone Clock</h1>
+        <div style="color:#94a3b8;font-size:13px">Shows live time for many zones — updates every second</div>
+      </div>
+      <div class="controls">
+        <input id="tzInput" placeholder="e.g. Europe/London or UTC" />
+        <button id="addBtn">Add</button>
+      </div>
+    </header>
+
+    <div style="margin-top:8px;color:#94a3b8;font-size:13px">Examples: UTC, America/New_York, Europe/London, Asia/Kolkata, Asia/Tokyo</div>
+
+    <div id="clocks" class="grid" aria-live="polite"></div>
+    <div style="margin-top:10px;color:#94a3b8;font-size:13px">Local time: <span id="localTime"></span></div>
+  </div>
+
+<script>
+(function(){
+  const defaultZones = ["UTC", Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", "America/New_York","Europe/London","Asia/Kolkata","Asia/Tokyo"];
+  const clocksEl = document.getElementById('clocks');
+  const tzInput = document.getElementById('tzInput');
+  const addBtn = document.getElementById('addBtn');
+  const localTimeEl = document.getElementById('localTime');
+
+  function loadZones(){ try { const raw = localStorage.getItem('tz_clocks_v1'); if(raw) return JSON.parse(raw); } catch(e){} return defaultZones; }
+  function saveZones(z){ localStorage.setItem('tz_clocks_v1', JSON.stringify(z)); }
+
+  let zones = loadZones();
+
+  function niceTime(dt, tz){
+    const time = new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true,timeZone:tz}).format(dt);
+    const date = new Intl.DateTimeFormat(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric',timeZone:tz}).format(dt);
+    return {time,date};
+  }
+
+  function render(){
+    clocksEl.innerHTML = '';
+    zones.forEach((tz, idx)=>{
+      const card = document.createElement('div'); card.className='card'; card.dataset.tz=tz;
+      const nameRow = document.createElement('div'); nameRow.className='tz';
+      const nameSpan = document.createElement('div'); nameSpan.textContent = tz;
+      const removeBtn = document.createElement('button'); removeBtn.textContent='×'; removeBtn.style.background='transparent'; removeBtn.style.color='#ff9b9b'; removeBtn.style.border='none';
+      removeBtn.addEventListener('click', ()=>{ zones.splice(idx,1); saveZones(zones); render(); });
+      nameRow.appendChild(nameSpan); nameRow.appendChild(removeBtn);
+
+      const timeEl = document.createElement('div'); timeEl.className='time'; timeEl.textContent='—';
+      const dateEl = document.createElement('div'); dateEl.className='date'; dateEl.textContent='';
+
+      card.appendChild(nameRow); card.appendChild(timeEl); card.appendChild(dateEl);
+      clocksEl.appendChild(card);
+    });
+  }
+
+  function updateTimes(){
+    const now = new Date();
+    localTimeEl.textContent = new Intl.DateTimeFormat(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit',hour12:true}).format(now);
+    document.querySelectorAll('.card').forEach(card=>{
+      const tz = card.dataset.tz;
+      try {
+        const {time,date} = niceTime(now,tz);
+        card.querySelector('.time').textContent = time;
+        card.querySelector('.date').textContent = date;
+      } catch(e){
+        card.querySelector('.time').textContent = 'Invalid timezone';
+        card.querySelector('.date').textContent = '';
+      }
+    });
+  }
+
+  addBtn.addEventListener('click', ()=>{
+    const raw = tzInput.value.trim(); if(!raw) return;
+    try { new Intl.DateTimeFormat(undefined,{timeZone:raw}).format(new Date()); } catch(e){ alert('Invalid timezone. Use e.g. Europe/London or UTC.'); return; }
+    if(!zones.includes(raw)){ zones.push(raw); saveZones(zones); render(); tzInput.value=''; }
+  });
+  tzInput.addEventListener('keydown', ev=>{ if(ev.key==='Enter') addBtn.click(); });
+
+  render(); updateTimes(); setInterval(updateTimes,1000);
+})();
+</script>
+</body>
+</html>
